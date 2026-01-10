@@ -23,6 +23,45 @@ cargo run
 
 Multi-arch images are built and pushed to `ghcr.io` on main branch commits.
 
+## Flake
+
+Example:
+
+  ```nix
+  {
+    description = "My NixOS Flake";
+
+    inputs = {
+      nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+      flake-utils.url = "github:numtide/flake-utils";
+      twipla-monitor.url = "github:lzpreslav/twipla-monitor";
+    };
+
+    outputs = { self, nixpkgs, flake-utils, twipla-monitor }:
+      {
+        nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            ./hosts/myhost/configuration.nix
+            twipla-monitor.nixosModules.default
+          ];
+        };
+      };
+  }
+  ```
+
+and then in configuration.nix:
+
+  ```nix
+  sops.secrets."twipla-monitor/slackWebhook" = {};
+  services.twipla-monitor = {
+    enable = true;
+    events = [ "https://twipla.jp/events/1" ];
+    scrapePeriod = "5m";
+    slackWebhookFile = config.sops.secrets."twipla-monitor/slackWebhook".path;
+  };
+  ```
+
 ## Behavior
 
 - Checks configured events every scrape period
