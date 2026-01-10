@@ -1,0 +1,6 @@
+.DS_Store
+.envrc
+.envrc.example
+.github/
+*.md
+/target
