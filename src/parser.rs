@@ -52,7 +52,7 @@ fn parse_participant_text(text: &str) -> Result<EventStatus> {
         // Format: "100人／定員100人"
         let parts: Vec<&str> = content.split("／定員").collect();
         if parts.len() != 2 {
-            anyhow::bail!("Unexpected format with limit: {}", content);
+            anyhow::bail!("Unexpected format with limit: {content}");
         }
 
         let current = parse_number(parts[0])?;
@@ -78,7 +78,7 @@ fn parse_number(s: &str) -> Result<usize> {
     let num_str = s.trim().trim_end_matches('人');
     num_str
         .parse::<usize>()
-        .with_context(|| format!("Failed to parse number from: {}", s))
+        .with_context(|| format!("Failed to parse number from: {s}"))
 }
 
 #[cfg(test)]

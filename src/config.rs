@@ -23,19 +23,18 @@ impl Config {
             .context("Failed to parse TWIPLA_MONITOR_SCRAPE_PERIOD")?;
 
         // Check for webhook URL from file first, then direct URL
-        let slack_webhook_url =
-            if let Ok(file_path) = std::env::var("TWIPLA_MONITOR_SLACK_WEBHOOK_URL_FILE") {
-                Some(
-                    std::fs::read_to_string(&file_path)
-                        .with_context(|| {
-                            format!("Failed to read webhook URL from file: {}", file_path)
-                        })?
-                        .trim()
-                        .to_string(),
-                )
-            } else {
-                std::env::var("TWIPLA_MONITOR_SLACK_WEBHOOK_URL").ok()
-            };
+        let slack_webhook_url = if let Ok(file_path) =
+            std::env::var("TWIPLA_MONITOR_SLACK_WEBHOOK_URL_FILE")
+        {
+            Some(
+                std::fs::read_to_string(&file_path)
+                    .with_context(|| format!("Failed to read webhook URL from file: {file_path}"))?
+                    .trim()
+                    .to_string(),
+            )
+        } else {
+            std::env::var("TWIPLA_MONITOR_SLACK_WEBHOOK_URL").ok()
+        };
 
         Ok(Config {
             events,
