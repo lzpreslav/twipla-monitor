@@ -20,7 +20,7 @@ impl SlackNotifier {
         current: usize,
         limit: usize,
     ) -> Result<()> {
-        let message = format!("Free slot available: {} ({}/{})", event_url, current, limit);
+        let message = format!("Free slot available: {event_url} ({current}/{limit})");
 
         let payload = json!({
             "text": message

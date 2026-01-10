@@ -34,10 +34,7 @@ async fn main() -> Result<()> {
 
     let mut config = config;
 
-    let notifier = config
-        .slack_webhook_url
-        .take()
-        .map(|url| SlackNotifier::new(url));
+    let notifier = config.slack_webhook_url.take().map(SlackNotifier::new);
     let monitor = Monitor::new(config, notifier)?;
 
     monitor.run().await

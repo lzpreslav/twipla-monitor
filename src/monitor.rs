@@ -53,7 +53,7 @@ impl Monitor {
                             .send_notification(event_url, status.current, limit)
                             .await
                         {
-                            Ok(_) => {
+                            Ok(()) => {
                                 info!(
                                     event_url = %event_url,
                                     "Sent Slack notification"
