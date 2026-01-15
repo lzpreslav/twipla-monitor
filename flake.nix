@@ -27,6 +27,13 @@
           src = ./.;
           hooks = {
             nixfmt-rfc-style.enable = true;
+            clippy = {
+              enable = true;
+              settings = {
+                offline = false;
+                denyWarnings = true;
+              };
+            };
           };
         };
       in
