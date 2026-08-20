@@ -139,7 +139,12 @@ impl Monitor {
     }
 
     async fn check_event(&self, event_url: &str) -> Result<EventStatus> {
-        let response = self.client.get(event_url).send().await?;
+        let response = self
+            .client
+            .get(event_url)
+            .send()
+            .await?
+            .error_for_status()?;
         let html = response.text().await?;
         crate::parser::parse_event_html(&html)
     }
