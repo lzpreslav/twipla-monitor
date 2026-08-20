@@ -2,6 +2,14 @@
 .DS_Store
 .envrc
 .envrc.example
+.git
 .github/
+.gitignore
+.pre-commit-config.yaml
 *.md
 /target
+/result
+LICENSE
+flake.lock
+flake.nix
+nix/
