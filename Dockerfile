@@ -1,5 +1,5 @@
 # BUILD
-FROM --platform=$BUILDPLATFORM rust:alpine3.23@sha256:f6c22e0a256c05d44fca23bf530120b5d4a6249a393734884281ca80782329bc AS builder
+FROM --platform=$BUILDPLATFORM rust:alpine3.23@sha256:c4a364ddbf684fe038e6fa6a4f25b30c8dc85247423e0e660676ece0d17be4a2 AS builder
 
 # Build dependencies
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
@@ -11,7 +11,7 @@ COPY . ./
 RUN cargo build --release
 
 # RUNTIME
-FROM alpine:3.23.2@sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62
+FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 
 # Runtime dependencies
 RUN apk add --no-cache ca-certificates
