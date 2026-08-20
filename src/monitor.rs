@@ -58,7 +58,7 @@ impl Monitor {
 
                 let was_closed = self.last_closed.get(event_url).copied();
 
-                if !status.closed && was_closed == Some(true) {
+                if status.is_joinable() && was_closed == Some(true) {
                     // Keep the closed state until delivery succeeds so a
                     // failed send retries next tick.
                     if self.notify_reopened(event_url, &status).await {

@@ -17,6 +17,10 @@ impl EventStatus {
             None => false,
         }
     }
+
+    pub fn is_joinable(&self) -> bool {
+        !self.closed && self.limit.is_none_or(|limit| self.current < limit)
+    }
 }
 
 /// Parse the Twipla event HTML to extract participant information
@@ -171,6 +175,21 @@ mod tests {
         assert_eq!(status.limit, Some(100));
         assert!(status.closed);
         assert!(!status.has_free_slot());
+    }
+
+    #[test]
+    fn test_is_joinable() {
+        let status = |current, limit, closed| EventStatus {
+            current,
+            limit,
+            closed,
+        };
+
+        assert!(status(5, None, false).is_joinable());
+        assert!(status(5, Some(10), false).is_joinable());
+        assert!(!status(10, Some(10), false).is_joinable());
+        assert!(!status(5, None, true).is_joinable());
+        assert!(!status(5, Some(10), true).is_joinable());
     }
 
     #[test]
