@@ -7,11 +7,15 @@ pub struct SlackNotifier {
 }
 
 impl SlackNotifier {
-    pub fn new(webhook_url: String) -> Self {
-        Self {
+    pub fn new(webhook_url: String) -> Result<Self> {
+        let client = reqwest::Client::builder()
+            .timeout(crate::monitor::HTTP_TIMEOUT)
+            .build()?;
+
+        Ok(Self {
             webhook_url,
-            client: reqwest::Client::new(),
-        }
+            client,
+        })
     }
 
     pub async fn send_notification(
@@ -64,7 +68,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_slack_notifier_creation() {
-        let notifier = SlackNotifier::new("https://hooks.slack.com/test".to_string());
+        let notifier = SlackNotifier::new("https://hooks.slack.com/test".to_string()).unwrap();
         assert_eq!(notifier.webhook_url, "https://hooks.slack.com/test");
     }
 }

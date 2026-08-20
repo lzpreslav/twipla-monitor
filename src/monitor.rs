@@ -3,7 +3,10 @@ use crate::parser::EventStatus;
 use crate::slack::SlackNotifier;
 use anyhow::Result;
 use std::collections::HashMap;
+use std::time::Duration;
 use tracing::{error, info};
+
+pub const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct Monitor {
     client: reqwest::Client,
@@ -16,6 +19,7 @@ impl Monitor {
     pub fn new(config: Config, notifier: Option<SlackNotifier>) -> Result<Self> {
         let client = reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+            .timeout(HTTP_TIMEOUT)
             .build()?;
 
         Ok(Self {
@@ -28,6 +32,7 @@ impl Monitor {
 
     pub async fn run(&mut self) -> Result<()> {
         let mut interval = tokio::time::interval(self.config.scrape_period);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let events = self.config.events.clone();
 
         loop {
