@@ -51,14 +51,21 @@ impl Monitor {
                     "Checked event"
                 );
 
-                let was_closed = self
-                    .last_closed
-                    .insert(event_url.to_string(), status.closed);
+                let was_closed = self.last_closed.get(event_url).copied();
 
                 if !status.closed && was_closed == Some(true) {
-                    self.notify_reopened(event_url, &status).await;
-                } else if status.has_free_slot() {
-                    self.notify_free_slot(event_url, &status).await;
+                    // Keep the closed state until delivery succeeds so a
+                    // failed send retries next tick.
+                    if self.notify_reopened(event_url, &status).await {
+                        self.last_closed.insert(event_url.to_string(), false);
+                    }
+                } else {
+                    self.last_closed
+                        .insert(event_url.to_string(), status.closed);
+
+                    if status.has_free_slot() {
+                        self.notify_free_slot(event_url, &status).await;
+                    }
                 }
             }
             Err(e) => {
@@ -97,9 +104,11 @@ impl Monitor {
         }
     }
 
-    async fn notify_reopened(&self, event_url: &str, status: &EventStatus) {
+    /// Returns whether the notification was delivered (trivially true when
+    /// no notifier is configured).
+    async fn notify_reopened(&self, event_url: &str, status: &EventStatus) -> bool {
         let Some(ref notifier) = self.notifier else {
-            return;
+            return true;
         };
 
         match notifier
@@ -111,6 +120,7 @@ impl Monitor {
                     event_url = %event_url,
                     "Sent Slack reopened notification"
                 );
+                true
             }
             Err(e) => {
                 error!(
@@ -118,6 +128,7 @@ impl Monitor {
                     error = %e,
                     "Failed to send Slack reopened notification"
                 );
+                false
             }
         }
     }
