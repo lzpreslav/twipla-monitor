@@ -4,7 +4,7 @@ use crate::slack::SlackNotifier;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 pub const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -47,7 +47,7 @@ impl Monitor {
     async fn check_and_notify(&mut self, event_url: &str) {
         match self.check_event(event_url).await {
             Ok(status) => {
-                info!(
+                debug!(
                     event_url = %event_url,
                     current = status.current,
                     limit = ?status.limit,
@@ -94,7 +94,7 @@ impl Monitor {
             .await
         {
             Ok(()) => {
-                info!(
+                debug!(
                     event_url = %event_url,
                     "Sent Slack notification"
                 );
