@@ -65,8 +65,10 @@ and then in configuration.nix:
 ## Behavior
 
 - Checks configured events every scrape period
-- Sends notification on every check when free slots are available (current < limit)
-- Ignores events without limits (e.g. "参加者 (90人)")
+- Sends notification on every check when free slots are available (current < limit) and registration is open
+- Sends notification when an event that had closed registration (参加を締め切りました) starts accepting attendees again
+- Does not send free-slot notifications for events with closed registration, even if current < limit
+- Ignores events without limits (e.g. "参加者 (90人)") unless they transition from closed to open
 - Writes JSON-formatted logs to stdout
 
 ## TODO

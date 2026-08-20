@@ -20,8 +20,29 @@ impl SlackNotifier {
         current: usize,
         limit: usize,
     ) -> Result<()> {
-        let message = format!("Free slot available: {event_url} ({current}/{limit})");
+        self.post_text(&format!(
+            "Free slot available: {event_url} ({current}/{limit})"
+        ))
+        .await
+    }
 
+    pub async fn send_reopened_notification(
+        &self,
+        event_url: &str,
+        current: usize,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let count = match limit {
+            Some(limit) => format!("{current}/{limit}"),
+            None => format!("{current}人"),
+        };
+        self.post_text(&format!(
+            "Event is accepting attendees again: {event_url} ({count})"
+        ))
+        .await
+    }
+
+    async fn post_text(&self, message: &str) -> Result<()> {
         let payload = json!({
             "text": message
         });

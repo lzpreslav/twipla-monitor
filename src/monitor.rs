@@ -2,12 +2,14 @@ use crate::config::Config;
 use crate::parser::EventStatus;
 use crate::slack::SlackNotifier;
 use anyhow::Result;
+use std::collections::HashMap;
 use tracing::{error, info};
 
 pub struct Monitor {
     client: reqwest::Client,
     config: Config,
     notifier: Option<SlackNotifier>,
+    last_closed: HashMap<String, bool>,
 }
 
 impl Monitor {
@@ -20,54 +22,43 @@ impl Monitor {
             client,
             config,
             notifier,
+            last_closed: HashMap::new(),
         })
     }
 
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         let mut interval = tokio::time::interval(self.config.scrape_period);
+        let events = self.config.events.clone();
 
         loop {
             interval.tick().await;
 
-            for event_url in &self.config.events {
+            for event_url in &events {
                 self.check_and_notify(event_url).await;
             }
         }
     }
 
-    async fn check_and_notify(&self, event_url: &str) {
+    async fn check_and_notify(&mut self, event_url: &str) {
         match self.check_event(event_url).await {
             Ok(status) => {
                 info!(
                     event_url = %event_url,
                     current = status.current,
                     limit = ?status.limit,
+                    closed = status.closed,
                     has_free_slot = status.has_free_slot(),
                     "Checked event"
                 );
 
-                if status.has_free_slot() {
-                    if let Some(ref notifier) = self.notifier {
-                        let limit = status.limit.unwrap(); // Safe because has_free_slot checks this
-                        match notifier
-                            .send_notification(event_url, status.current, limit)
-                            .await
-                        {
-                            Ok(()) => {
-                                info!(
-                                    event_url = %event_url,
-                                    "Sent Slack notification"
-                                );
-                            }
-                            Err(e) => {
-                                error!(
-                                    event_url = %event_url,
-                                    error = %e,
-                                    "Failed to send Slack notification"
-                                );
-                            }
-                        }
-                    }
+                let was_closed = self
+                    .last_closed
+                    .insert(event_url.to_string(), status.closed);
+
+                if !status.closed && was_closed == Some(true) {
+                    self.notify_reopened(event_url, &status).await;
+                } else if status.has_free_slot() {
+                    self.notify_free_slot(event_url, &status).await;
                 }
             }
             Err(e) => {
@@ -75,6 +66,57 @@ impl Monitor {
                     event_url = %event_url,
                     error = %e,
                     "Failed to check event"
+                );
+            }
+        }
+    }
+
+    async fn notify_free_slot(&self, event_url: &str, status: &EventStatus) {
+        let Some(ref notifier) = self.notifier else {
+            return;
+        };
+
+        let limit = status.limit.unwrap(); // Safe because has_free_slot checks this
+        match notifier
+            .send_notification(event_url, status.current, limit)
+            .await
+        {
+            Ok(()) => {
+                info!(
+                    event_url = %event_url,
+                    "Sent Slack notification"
+                );
+            }
+            Err(e) => {
+                error!(
+                    event_url = %event_url,
+                    error = %e,
+                    "Failed to send Slack notification"
+                );
+            }
+        }
+    }
+
+    async fn notify_reopened(&self, event_url: &str, status: &EventStatus) {
+        let Some(ref notifier) = self.notifier else {
+            return;
+        };
+
+        match notifier
+            .send_reopened_notification(event_url, status.current, status.limit)
+            .await
+        {
+            Ok(()) => {
+                info!(
+                    event_url = %event_url,
+                    "Sent Slack reopened notification"
+                );
+            }
+            Err(e) => {
+                error!(
+                    event_url = %event_url,
+                    error = %e,
+                    "Failed to send Slack reopened notification"
                 );
             }
         }
