@@ -41,5 +41,17 @@ async fn main() -> Result<()> {
         .transpose()?;
     let mut monitor = Monitor::new(config, notifier)?;
 
-    monitor.run().await
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+
+    tokio::select! {
+        result = monitor.run() => result,
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received SIGINT, shutting down");
+            Ok(())
+        }
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM, shutting down");
+            Ok(())
+        }
+    }
 }
