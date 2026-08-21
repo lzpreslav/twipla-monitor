@@ -33,7 +33,7 @@ pub fn parse_event_html(html: &str) -> Result<EventStatus> {
     let div_selector = Selector::parse("div.member_list").unwrap();
 
     for div in document.select(&div_selector) {
-        let text = div.text().collect::<Vec<_>>().concat();
+        let text = div.text().collect::<String>();
 
         // Look for the div that starts with "参加者"
         if text.trim().starts_with("参加者") {
@@ -51,8 +51,7 @@ fn is_registration_closed(document: &Html) -> bool {
 
     document.select(&join_div_selector).any(|div| {
         div.text()
-            .collect::<Vec<_>>()
-            .concat()
+            .collect::<String>()
             .contains(REGISTRATION_CLOSED_TEXT)
     })
 }
