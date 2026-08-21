@@ -48,8 +48,6 @@
           buildInputs = with pkgs; [
             cargo
             clippy
-            openssl
-            pkg-config
             rust-analyzer
             rustc
           ];

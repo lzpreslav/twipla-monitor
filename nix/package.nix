@@ -1,8 +1,5 @@
 {
   rustPlatform,
-  pkg-config,
-  openssl,
-  cacert,
   lib,
 }:
 
@@ -15,15 +12,6 @@ rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ../Cargo.lock;
   };
-
-  nativeBuildInputs = [
-    pkg-config
-    cacert
-  ];
-
-  buildInputs = [
-    openssl
-  ];
 
   meta = with lib; {
     description = "Monitors Twipla.jp events for available slots and sends Slack notifications";

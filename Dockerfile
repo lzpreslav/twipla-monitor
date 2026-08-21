@@ -2,7 +2,7 @@
 FROM rust:alpine3.23@sha256:c4a364ddbf684fe038e6fa6a4f25b30c8dc85247423e0e660676ece0d17be4a2 AS builder
 
 # Build dependencies
-RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
+RUN apk add --no-cache musl-dev
 
 WORKDIR /app
 
