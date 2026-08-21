@@ -6,9 +6,17 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /app
 
-COPY . ./
+# Build dependencies against a stub main first, so this layer stays cached
+# until Cargo.toml/Cargo.lock change
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo 'fn main() {}' > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
 
-RUN cargo build --release
+COPY src ./src
+
+# touch, or cargo may consider the stub-built binary fresh
+RUN touch src/main.rs && cargo build --release
 
 # RUNTIME
 FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
