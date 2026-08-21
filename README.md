@@ -65,7 +65,7 @@ and then in configuration.nix:
 ## Behavior
 
 - Checks configured events every scrape period
-- Sends notification on every check when free slots are available (current < limit) and registration is open
+- Sends one notification when free slots become available (current < limit) and registration is open; does not repeat while the slots stay available, and re-arms once the event fills up again
 - Sends notification when an event that had closed registration (参加を締め切りました) starts accepting attendees again
 - Does not send free-slot notifications for events with closed registration, even if current < limit
 - Ignores events without limits (e.g. "参加者 (90人)") unless they transition from closed to open
@@ -75,4 +75,3 @@ and then in configuration.nix:
 
 - Improve/restyle the Slack notifications
 - Track individual user participation (if I find a use case)
-- Deduplicate notifications (if an event has a free slot and I send a notification, do not resend for X minutes)

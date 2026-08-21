@@ -8,6 +8,21 @@ use tracing::{debug, error, info};
 
 pub const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Debug, Clone, Copy)]
+struct EventState {
+    closed: bool,
+    had_free_slot: bool,
+}
+
+impl EventState {
+    fn of(status: &EventStatus) -> Self {
+        Self {
+            closed: status.closed,
+            had_free_slot: status.has_free_slot(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum Action {
     NotifyReopened,
@@ -15,10 +30,10 @@ enum Action {
     Nothing,
 }
 
-fn decide_action(was_closed: Option<bool>, status: &EventStatus) -> Action {
-    if status.is_joinable() && was_closed == Some(true) {
+fn decide_action(prev: Option<EventState>, status: &EventStatus) -> Action {
+    if status.is_joinable() && prev.is_some_and(|p| p.closed) {
         Action::NotifyReopened
-    } else if status.has_free_slot() {
+    } else if status.has_free_slot() && !prev.is_some_and(|p| p.had_free_slot) {
         Action::NotifyFreeSlot
     } else {
         Action::Nothing
@@ -29,7 +44,7 @@ pub struct Monitor {
     client: reqwest::Client,
     config: Config,
     notifier: Option<SlackNotifier>,
-    last_closed: HashMap<String, bool>,
+    last_state: HashMap<String, EventState>,
 }
 
 impl Monitor {
@@ -43,7 +58,7 @@ impl Monitor {
             client,
             config,
             notifier,
-            last_closed: HashMap::new(),
+            last_state: HashMap::new(),
         })
     }
 
@@ -73,25 +88,19 @@ impl Monitor {
                     "Checked event"
                 );
 
-                let was_closed = self.last_closed.get(event_url).copied();
+                let prev = self.last_state.get(event_url).copied();
 
-                match decide_action(was_closed, &status) {
-                    Action::NotifyReopened => {
-                        // Keep the closed state until delivery succeeds so a
-                        // failed send retries next tick.
-                        if self.notify_reopened(event_url, &status).await {
-                            self.last_closed.insert(event_url.to_string(), false);
-                        }
-                    }
-                    Action::NotifyFreeSlot => {
-                        self.last_closed
-                            .insert(event_url.to_string(), status.closed);
-                        self.notify_free_slot(event_url, &status).await;
-                    }
-                    Action::Nothing => {
-                        self.last_closed
-                            .insert(event_url.to_string(), status.closed);
-                    }
+                let delivered = match decide_action(prev, &status) {
+                    Action::NotifyReopened => self.notify_reopened(event_url, &status).await,
+                    Action::NotifyFreeSlot => self.notify_free_slot(event_url, &status).await,
+                    Action::Nothing => true,
+                };
+
+                // Keep the previous state until delivery succeeds so a
+                // failed send retries next tick.
+                if delivered {
+                    self.last_state
+                        .insert(event_url.to_string(), EventState::of(&status));
                 }
             }
             Err(e) => {
@@ -104,9 +113,11 @@ impl Monitor {
         }
     }
 
-    async fn notify_free_slot(&self, event_url: &str, status: &EventStatus) {
+    /// Returns whether the notification was delivered (trivially true when
+    /// no notifier is configured).
+    async fn notify_free_slot(&self, event_url: &str, status: &EventStatus) -> bool {
         let Some(ref notifier) = self.notifier else {
-            return;
+            return true;
         };
 
         let limit = status.limit.unwrap(); // Safe because has_free_slot checks this
@@ -115,10 +126,11 @@ impl Monitor {
             .await
         {
             Ok(()) => {
-                debug!(
+                info!(
                     event_url = %event_url,
                     "Sent Slack notification"
                 );
+                true
             }
             Err(e) => {
                 error!(
@@ -126,6 +138,7 @@ impl Monitor {
                     error = %e,
                     "Failed to send Slack notification"
                 );
+                false
             }
         }
     }
@@ -183,6 +196,13 @@ mod tests {
         }
     }
 
+    fn state(closed: bool, had_free_slot: bool) -> Option<EventState> {
+        Some(EventState {
+            closed,
+            had_free_slot,
+        })
+    }
+
     #[test]
     fn test_first_observation() {
         assert_eq!(
@@ -199,42 +219,48 @@ mod tests {
     #[test]
     fn test_reopened_transitions() {
         assert_eq!(
-            decide_action(Some(true), &status(1, None, false)),
+            decide_action(state(true, false), &status(1, None, false)),
             Action::NotifyReopened
         );
         assert_eq!(
-            decide_action(Some(true), &status(5, Some(10), false)),
+            decide_action(state(true, false), &status(5, Some(10), false)),
             Action::NotifyReopened
         );
         // reopened while already full
         assert_eq!(
-            decide_action(Some(true), &status(10, Some(10), false)),
+            decide_action(state(true, false), &status(10, Some(10), false)),
             Action::Nothing
         );
         // still closed
         assert_eq!(
-            decide_action(Some(true), &status(1, None, true)),
+            decide_action(state(true, false), &status(1, None, true)),
             Action::Nothing
         );
     }
 
     #[test]
-    fn test_steady_state() {
+    fn test_free_slot_edges() {
         assert_eq!(
-            decide_action(Some(false), &status(5, Some(10), false)),
+            decide_action(state(false, false), &status(5, Some(10), false)),
             Action::NotifyFreeSlot
         );
+        // already notified for this opening
         assert_eq!(
-            decide_action(Some(false), &status(10, Some(10), false)),
+            decide_action(state(false, true), &status(4, Some(10), false)),
+            Action::Nothing
+        );
+        // filled up again; re-arms for the next opening
+        assert_eq!(
+            decide_action(state(false, true), &status(10, Some(10), false)),
             Action::Nothing
         );
         assert_eq!(
-            decide_action(Some(false), &status(5, None, false)),
+            decide_action(state(false, false), &status(5, None, false)),
             Action::Nothing
         );
-        // open -> closed
+        // just closed
         assert_eq!(
-            decide_action(Some(false), &status(5, Some(10), true)),
+            decide_action(state(false, false), &status(5, Some(10), true)),
             Action::Nothing
         );
     }
