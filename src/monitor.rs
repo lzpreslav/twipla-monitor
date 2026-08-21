@@ -8,6 +8,23 @@ use tracing::{debug, error, info};
 
 pub const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Debug, PartialEq)]
+enum Action {
+    NotifyReopened,
+    NotifyFreeSlot,
+    Nothing,
+}
+
+fn decide_action(was_closed: Option<bool>, status: &EventStatus) -> Action {
+    if status.is_joinable() && was_closed == Some(true) {
+        Action::NotifyReopened
+    } else if status.has_free_slot() {
+        Action::NotifyFreeSlot
+    } else {
+        Action::Nothing
+    }
+}
+
 pub struct Monitor {
     client: reqwest::Client,
     config: Config,
@@ -58,18 +75,22 @@ impl Monitor {
 
                 let was_closed = self.last_closed.get(event_url).copied();
 
-                if status.is_joinable() && was_closed == Some(true) {
-                    // Keep the closed state until delivery succeeds so a
-                    // failed send retries next tick.
-                    if self.notify_reopened(event_url, &status).await {
-                        self.last_closed.insert(event_url.to_string(), false);
+                match decide_action(was_closed, &status) {
+                    Action::NotifyReopened => {
+                        // Keep the closed state until delivery succeeds so a
+                        // failed send retries next tick.
+                        if self.notify_reopened(event_url, &status).await {
+                            self.last_closed.insert(event_url.to_string(), false);
+                        }
                     }
-                } else {
-                    self.last_closed
-                        .insert(event_url.to_string(), status.closed);
-
-                    if status.has_free_slot() {
+                    Action::NotifyFreeSlot => {
+                        self.last_closed
+                            .insert(event_url.to_string(), status.closed);
                         self.notify_free_slot(event_url, &status).await;
+                    }
+                    Action::Nothing => {
+                        self.last_closed
+                            .insert(event_url.to_string(), status.closed);
                     }
                 }
             }
@@ -147,5 +168,74 @@ impl Monitor {
             .error_for_status()?;
         let html = response.text().await?;
         crate::parser::parse_event_html(&html)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn status(current: usize, limit: Option<usize>, closed: bool) -> EventStatus {
+        EventStatus {
+            current,
+            limit,
+            closed,
+        }
+    }
+
+    #[test]
+    fn test_first_observation() {
+        assert_eq!(
+            decide_action(None, &status(5, Some(10), false)),
+            Action::NotifyFreeSlot
+        );
+        assert_eq!(decide_action(None, &status(1, None, true)), Action::Nothing);
+        assert_eq!(
+            decide_action(None, &status(5, None, false)),
+            Action::Nothing
+        );
+    }
+
+    #[test]
+    fn test_reopened_transitions() {
+        assert_eq!(
+            decide_action(Some(true), &status(1, None, false)),
+            Action::NotifyReopened
+        );
+        assert_eq!(
+            decide_action(Some(true), &status(5, Some(10), false)),
+            Action::NotifyReopened
+        );
+        // reopened while already full
+        assert_eq!(
+            decide_action(Some(true), &status(10, Some(10), false)),
+            Action::Nothing
+        );
+        // still closed
+        assert_eq!(
+            decide_action(Some(true), &status(1, None, true)),
+            Action::Nothing
+        );
+    }
+
+    #[test]
+    fn test_steady_state() {
+        assert_eq!(
+            decide_action(Some(false), &status(5, Some(10), false)),
+            Action::NotifyFreeSlot
+        );
+        assert_eq!(
+            decide_action(Some(false), &status(10, Some(10), false)),
+            Action::Nothing
+        );
+        assert_eq!(
+            decide_action(Some(false), &status(5, None, false)),
+            Action::Nothing
+        );
+        // open -> closed
+        assert_eq!(
+            decide_action(Some(false), &status(5, Some(10), true)),
+            Action::Nothing
+        );
     }
 }
